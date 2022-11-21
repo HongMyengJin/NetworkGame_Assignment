@@ -72,6 +72,7 @@ char* WCharToChar(const wchar_t* pwstrSrc)
 
 wchar_t lpstrFile[MAX_PATH];
 char str[256];
+OPENFILENAME OFN;
 // 대화상자 프로시저
 INT_PTR CALLBACK DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
@@ -87,7 +88,7 @@ INT_PTR CALLBACK DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
     case WM_COMMAND:
         switch (LOWORD(wParam)) {
         case IDC_BUTTON1:
-            OPENFILENAME OFN;
+
             memset(&OFN, 0, sizeof(OPENFILENAME));
             OFN.lStructSize = sizeof(OPENFILENAME);
             OFN.hwndOwner = hDlg;
@@ -97,6 +98,7 @@ INT_PTR CALLBACK DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
             if (GetOpenFileName(&OFN) != 0) {
                 char* p = WCharToChar(OFN.lpstrFile);
                 SetDlgItemTextA(hDlg, IDC_EDIT1, p);
+                
             }
 
             //EnableWindow(hSendButton, FALSE); // 보내기 버튼 비활성화
@@ -107,6 +109,7 @@ INT_PTR CALLBACK DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
             //SendMessage(hEdit1, EM_SETSEL, 0, -1); // 텍스트 전체 선택
             return TRUE;
         case IDC_BUTTON2:
+            SetEvent(hWriteEvent); // 쓰기 완료 알림
             break;
         case IDCANCEL:
             EndDialog(hDlg, IDCANCEL); // 대화상자 닫기
@@ -163,42 +166,126 @@ DWORD WINAPI ClientMain(LPVOID arg)
     retval = connect(sock, (struct sockaddr*)&serveraddr, sizeof(serveraddr));
     if (retval == SOCKET_ERROR) err_quit("connect()");
 
-    // 서버와 데이터 통신
-    while (1) {
+    //// 서버와 데이터 통신
+    //while (1) {
+    //    WaitForSingleObject(hWriteEvent, INFINITE); // 쓰기 완료 대기
+
+    //    // 문자열 길이가 0이면 보내지 않음
+    //    if (strlen(buf) == 0) {
+    //        EnableWindow(hSendButton, TRUE); // 보내기 버튼 활성화
+    //        SetEvent(hReadEvent); // 읽기 완료 알림
+    //        continue;
+    //    }
+
+    //    // 데이터 보내기
+    //    retval = send(sock, buf, (int)strlen(buf), 0);
+    //    if (retval == SOCKET_ERROR) {
+    //        DisplayError("send()");
+    //        break;
+    //    }
+    //    DisplayText("[TCP 클라이언트] %d바이트를 보냈습니다.\r\n", retval);
+
+    //    // 데이터 받기
+    //    retval = recv(sock, buf, retval, MSG_WAITALL);
+    //    if (retval == SOCKET_ERROR) {
+    //        DisplayError("recv()");
+    //        break;
+    //    }
+    //    else if (retval == 0)
+    //        break;
+
+    //    // 받은 데이터 출력
+    //    buf[retval] = '\0';
+    //    DisplayText("[TCP 클라이언트] %d바이트를 받았습니다.\r\n", retval);
+    //    DisplayText("[받은 데이터] %s\r\n", buf);
+
+    //    EnableWindow(hSendButton, TRUE); // 보내기 버튼 활성화
+    //    SetEvent(hReadEvent); // 읽기 완료 알림
+    //}
+    while (1)
+    {
         WaitForSingleObject(hWriteEvent, INFINITE); // 쓰기 완료 대기
+        FILE* fp = NULL;
 
-        // 문자열 길이가 0이면 보내지 않음
-        if (strlen(buf) == 0) {
-            EnableWindow(hSendButton, TRUE); // 보내기 버튼 활성화
-            SetEvent(hReadEvent); // 읽기 완료 알림
-            continue;
+        char* FileDataBuf = NULL;
+        char* FileNameBuf = NULL;
+
+        char* FilePath = WCharToChar(OFN.lpstrFile);
+        
+        char* FileName = strrchr(FilePath, '\\') + 1;
+
+        const char* ip = SERVERIP;
+
+        fp = fopen(FileName, "rb");
+        if (fp == NULL) {
+            printf("%s 존재하지 않는 파일명입니다.", FileName);
+            return 0;
         }
 
-        // 데이터 보내기
-        retval = send(sock, buf, (int)strlen(buf), 0);
+        // 파일 크기 구하기
+        fseek(fp, 0, SEEK_END);
+        int Filesize = ftell(fp);
+
+        fseek(fp, 0, SEEK_SET); // 파일 포인터를 파일의 처음으로 이동시킴
+
+        // 파일 이름 구하기
+        int NameSize = strlen(FileName);
+
+        FileDataBuf = new char[Filesize];
+        FileNameBuf = new char[NameSize];
+
+        memset(FileDataBuf, 0, Filesize); // 파일 크기만큼 메모리를 0으로 초기화
+
+
+        // 서버와 데이터 통신
+        // 파일 이름 데이터 
+        strncpy(FileNameBuf, FileName, NameSize);
+        FileNameBuf[NameSize] = '\0';
+        // 데이터 보내기(파일 이름 크기)
+        retval = send(sock, (const char*)&NameSize, sizeof(NameSize), 0);
         if (retval == SOCKET_ERROR) {
-            DisplayError("send()");
-            break;
+            err_display("send() - file name size");
         }
-        DisplayText("[TCP 클라이언트] %d바이트를 보냈습니다.\r\n", retval);
 
-        // 데이터 받기
-        retval = recv(sock, buf, retval, MSG_WAITALL);
+        // 데이터 보내기(이름 데이터) // 크기
+        retval = send(sock, FileNameBuf, NameSize, 0);
         if (retval == SOCKET_ERROR) {
-            DisplayError("recv()");
-            break;
+            err_display("send() - file name buf");
         }
-        else if (retval == 0)
-            break;
 
-        // 받은 데이터 출력
-        buf[retval] = '\0';
-        DisplayText("[TCP 클라이언트] %d바이트를 받았습니다.\r\n", retval);
-        DisplayText("[받은 데이터] %s\r\n", buf);
+        // 데이터 보내기(데이터) // 파일 크기
+        retval = send(sock, (const char*)&Filesize, sizeof(Filesize), 0);
+        if (retval == SOCKET_ERROR) {
+            err_display("send() - file size");
+        }
 
-        EnableWindow(hSendButton, TRUE); // 보내기 버튼 활성화
-        SetEvent(hReadEvent); // 읽기 완료 알림
+
+        char dataBuf[BUFSIZE];
+        int leftDataSize = Filesize; // 미 수신 데이터
+        int bufSize = BUFSIZE;
+
+        while (leftDataSize > 0) {
+            if (leftDataSize < BUFSIZE)
+                bufSize = leftDataSize;
+            else
+                bufSize = BUFSIZE;
+
+            // 데이터 보내기 (가변 길이) - 파일 내용
+            fread(dataBuf, bufSize, 1, fp);
+
+            retval = send(sock, dataBuf, bufSize, 0);
+            if (retval == SOCKET_ERROR) {
+                err_display("send() file data ");
+                break;
+            }
+
+            leftDataSize -= bufSize;
+        }
+
+        delete[] FileDataBuf;
+        //delete[] FileNameBuf;
+        fclose(fp);
+
     }
-
     return 0;
 }
