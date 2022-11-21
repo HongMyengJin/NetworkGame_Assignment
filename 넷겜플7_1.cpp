@@ -1,5 +1,6 @@
 ﻿#include "Common.h"
 #include "resource.h"
+#include <CommCtrl.h>
 #include <atlstr.h> // mfc 사용x
 #define SERVERIP   "127.0.0.1"
 #define SERVERPORT 9000
@@ -20,7 +21,8 @@ HANDLE hReadEvent, hWriteEvent; // 이벤트
 HWND hSendButton; // 보내기 버튼
 HWND hSearchButton; // 찾기 버튼
 HWND hEdit1, hEdit2; // 에디트 컨트롤
-
+HWND hProgress;
+HWND Have;
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     LPSTR lpCmdLine, int nCmdShow)
 {
@@ -83,12 +85,17 @@ INT_PTR CALLBACK DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
         hEdit2 = GetDlgItem(hDlg, IDC_EDIT2);
         hSearchButton = GetDlgItem(hDlg, IDC_BUTTON1);
         hSendButton = GetDlgItem(hDlg, IDC_BUTTON2);
+        hProgress = GetDlgItem(hDlg, IDC_PROGRESS1);
         SendMessage(hEdit1, EM_SETLIMITTEXT, BUFSIZE, 0);
+        SendMessage(hProgress, PBM_SETRANGE, 0, 100);
+        SendMessage(hProgress, PBM_SETPOS, 10, 0);
+
         return TRUE;
     case WM_COMMAND:
         switch (LOWORD(wParam)) {
         case IDC_BUTTON1:
-
+            //SendMessage(hProgress, PBM_SETPOS, (WPARAM)nPos, 0);
+            
             memset(&OFN, 0, sizeof(OPENFILENAME));
             OFN.lStructSize = sizeof(OPENFILENAME);
             OFN.hwndOwner = hDlg;
@@ -97,13 +104,13 @@ INT_PTR CALLBACK DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
             OFN.nMaxFile = 256;
             if (GetOpenFileName(&OFN) != 0) {
                 char* p = WCharToChar(OFN.lpstrFile);
-                SetDlgItemTextA(hDlg, IDC_EDIT1, p);
+                SetDlgItemTextA(hDlg, IDC_EDIT2, p);
                 
             }
-
+            SendMessage(hProgress, PBM_SETRANGE, 0, MAKELPARAM(0, 100));//프로그레스 초기화
+            SendMessage(hProgress, PBM_SETPOS, 0, 0);//프로그레스 초기값
             //EnableWindow(hSendButton, FALSE); // 보내기 버튼 비활성화
             //WaitForSingleObject(hReadEvent, INFINITE); // 읽기 완료 대기
-            GetDlgItemTextA(hDlg, IDC_EDIT1, buf, BUFSIZE + 1);
             //SetEvent(hWriteEvent); // 쓰기 완료 알림
             //SetFocus(hEdit1); // 키보드 포커스 전환
             //SendMessage(hEdit1, EM_SETSEL, 0, -1); // 텍스트 전체 선택
@@ -278,7 +285,8 @@ DWORD WINAPI ClientMain(LPVOID arg)
                 err_display("send() file data ");
                 break;
             }
-
+            SendMessage((HWND)hProgress, PBM_SETPOS, ((float)(Filesize - leftDataSize) / Filesize) * 100, 100);
+            //SendDlgItemMessage(hProgress, IDC_PROGRESS1, PBM_SETPOS, (float)leftDataSize / Filesize, 0);
             leftDataSize -= bufSize;
         }
 
