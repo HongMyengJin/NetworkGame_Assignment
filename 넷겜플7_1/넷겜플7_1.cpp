@@ -18,6 +18,7 @@ SOCKET sock; // 소켓
 char buf[BUFSIZE + 1]; // 데이터 송수신 버퍼
 HANDLE hReadEvent, hWriteEvent; // 이벤트
 HWND hSendButton; // 보내기 버튼
+HWND hSearchButton; // 찾기 버튼
 HWND hEdit1, hEdit2; // 에디트 컨트롤
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
@@ -47,25 +48,54 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	return 0;
 }
 
+//void CharToWChar(const char* pstrSrc, wchar_t pwstrDest[])
+//{
+//	int nLen = (int)strlen(pstrSrc) + 1;
+//	mbstowcs(pwstrDest, pstrSrc, nLen);
+//}
+
+wchar_t* CharToWChar(char* pstrSrc)
+{
+	int nLen = (int)strlen(pstrSrc) + 1;
+	wchar_t* pwstr = (LPWSTR)malloc(sizeof(wchar_t) * nLen);
+	mbstowcs(pwstr, pstrSrc, nLen);
+	return pwstr;
+}
+wchar_t lpstrFile[MAX_PATH];
+wchar_t str[256];
 // 대화상자 프로시저
 INT_PTR CALLBACK DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	switch (uMsg) {
 	case WM_INITDIALOG:
+
 		hEdit1 = GetDlgItem(hDlg, IDC_EDIT1);
 		hEdit2 = GetDlgItem(hDlg, IDC_EDIT2);
-		hSendButton = GetDlgItem(hDlg, IDC_BUTTON1);
+		hSearchButton = GetDlgItem(hDlg, IDC_BUTTON1);
+		hSendButton = GetDlgItem(hDlg, IDC_BUTTON2);
 		SendMessage(hEdit1, EM_SETLIMITTEXT, BUFSIZE, 0);
 		return TRUE;
 	case WM_COMMAND:
 		switch (LOWORD(wParam)) {
-		case IDOK:
-			EnableWindow(hSendButton, FALSE); // 보내기 버튼 비활성화
-			WaitForSingleObject(hReadEvent, INFINITE); // 읽기 완료 대기
-			GetDlgItemTextA(hDlg, IDC_EDIT1, buf, BUFSIZE + 1);
-			SetEvent(hWriteEvent); // 쓰기 완료 알림
-			SetFocus(hEdit1); // 키보드 포커스 전환
-			SendMessage(hEdit1, EM_SETSEL, 0, -1); // 텍스트 전체 선택
+		case IDC_BUTTON2:
+			OPENFILENAME OFN;
+			memset(&OFN, 0, sizeof(OPENFILENAME));
+			OFN.lStructSize = sizeof(OPENFILENAME);
+			OFN.hwndOwner = hDlg;
+			OFN.lpstrFilter = L"Every File(*.*)\0*.*\0Text File\0*.txt;*.doc\0";
+			OFN.lpstrFile = lpstrFile;
+			OFN.nMaxFile = 256;
+			if (GetOpenFileName(&OFN) != 0) {
+				MessageBox(hDlg, str, L"파일 열기 성공", MB_OK);
+			}
+
+
+			//EnableWindow(hSendButton, FALSE); // 보내기 버튼 비활성화
+			//WaitForSingleObject(hReadEvent, INFINITE); // 읽기 완료 대기
+			//GetDlgItemTextA(hDlg, IDC_EDIT1, buf, BUFSIZE + 1);
+			//SetEvent(hWriteEvent); // 쓰기 완료 알림
+			//SetFocus(hEdit1); // 키보드 포커스 전환
+			//SendMessage(hEdit1, EM_SETSEL, 0, -1); // 텍스트 전체 선택
 			return TRUE;
 		case IDCANCEL:
 			EndDialog(hDlg, IDCANCEL); // 대화상자 닫기
