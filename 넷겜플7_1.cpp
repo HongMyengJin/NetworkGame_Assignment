@@ -22,7 +22,7 @@ HWND hSendButton; // 보내기 버튼
 HWND hSearchButton; // 찾기 버튼
 HWND hEdit1, hEdit2; // 에디트 컨트롤
 HWND hProgress;
-HWND Have;
+HWND hList;
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     LPSTR lpCmdLine, int nCmdShow)
 {
@@ -86,14 +86,15 @@ INT_PTR CALLBACK DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
         hSearchButton = GetDlgItem(hDlg, IDC_BUTTON1);
         hSendButton = GetDlgItem(hDlg, IDC_BUTTON2);
         hProgress = GetDlgItem(hDlg, IDC_PROGRESS1);
+        hList = GetDlgItem(hDlg, IDC_LIST1);
         SendMessage(hEdit1, EM_SETLIMITTEXT, BUFSIZE, 0);
         SendMessage(hProgress, PBM_SETRANGE, 0, 100);
         SendMessage(hProgress, PBM_SETPOS, 10, 0);
-
+        EnableWindow(hSendButton, FALSE); // 보내기 버튼 활성화
         return TRUE;
     case WM_COMMAND:
         switch (LOWORD(wParam)) {
-        case IDC_BUTTON1:
+        case IDC_BUTTON1: // 파일 입력
             //SendMessage(hProgress, PBM_SETPOS, (WPARAM)nPos, 0);
             
             memset(&OFN, 0, sizeof(OPENFILENAME));
@@ -109,14 +110,17 @@ INT_PTR CALLBACK DlgProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
             }
             SendMessage(hProgress, PBM_SETRANGE, 0, MAKELPARAM(0, 100));//프로그레스 초기화
             SendMessage(hProgress, PBM_SETPOS, 0, 0);//프로그레스 초기값
-            //EnableWindow(hSendButton, FALSE); // 보내기 버튼 비활성화
-            //WaitForSingleObject(hReadEvent, INFINITE); // 읽기 완료 대기
+            EnableWindow(hSendButton, TRUE); // 보내기 버튼 활성화
+
             //SetEvent(hWriteEvent); // 쓰기 완료 알림
             //SetFocus(hEdit1); // 키보드 포커스 전환
             //SendMessage(hEdit1, EM_SETSEL, 0, -1); // 텍스트 전체 선택
             return TRUE;
-        case IDC_BUTTON2:
-            SetEvent(hWriteEvent); // 쓰기 완료 알림
+        case IDC_BUTTON2: // 파일 Send
+            SetEvent(hWriteEvent); // 파일 Send
+            EnableWindow(hSendButton, FALSE); // 보내기 버튼 비활성화
+            WaitForSingleObject(hReadEvent, INFINITE); // 읽기 완료 대기
+            
             break;
         case IDCANCEL:
             EndDialog(hDlg, IDCANCEL); // 대화상자 닫기
@@ -293,7 +297,9 @@ DWORD WINAPI ClientMain(LPVOID arg)
         delete[] FileDataBuf;
         //delete[] FileNameBuf;
         fclose(fp);
-
+        SetEvent(hReadEvent); // 읽기 완료 알림
+        SendMessage(hList, LB_ADDSTRING, 0, LPARAM(OFN.lpstrFile)); // 텍스트 전체 선택
     }
+    
     return 0;
 }
